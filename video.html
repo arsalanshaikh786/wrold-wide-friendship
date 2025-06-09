@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FriendGlobe - Video Call</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #222;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      height: 100vh;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    video {
+      width: 45%;
+      max-width: 600px;
+      border: 2px solid #007bff;
+      border-radius: 10px;
+      background: black;
+    }
+    #videos {
+      display: flex;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 1200px;
+      margin-top: 10px;
+    }
+    #controls {
+      margin-top: 20px;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      margin-right: 10px;
+    }
+    input {
+      width: 200px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #hangupBtn {
+      background-color: #cc3300;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>FriendGlobe Video Call</h1>
+
+<div id="videos">
+  <video id="localVideo" autoplay muted playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+</div>
+
+<div id="controls">
+  <input type="text" id="roomIdInput" placeholder="Enter Room ID" />
+  <button id="joinBtn">Join Room</button>
+  <button id="hangupBtn" disabled>Hang Up</button>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyDpsoZ_648AwwL3BU-I_Hze5gZ90mFUTcs",
+    authDomain: "aaaa-8683a.firebaseapp.com",
+    projectId: "aaaa-8683a",
+    storageBucket: "aaaa-8683a.firebasestorage.app",
+    messagingSenderId: "864632443782",
+    appId: "1:864632443782:web:2896df049c72439d7dd207"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  let localStream = null;
+  let remoteStream = null;
+  let pc = null;
+  let roomRef = null;
+  let roomId = null;
+  let callerCandidatesCollection = null;
+  let calleeCandidatesCollection = null;
+
+  const localVideo = document.getElementById('localVideo');
+  const remoteVideo = document.getElementById('remoteVideo');
+  const roomIdInput = document.getElementById('roomIdInput');
+  const joinBtn = document.getElementById('joinBtn');
+  const hangupBtn = document.getElementById('hangupBtn');
+
+  // Check user login before allowing join
+  onAuthStateChanged(auth, user => {
+    if (!user) {
+      alert('Please login first');
+      window.location.href = 'index.html';
+    }
+  });
+
+  // WebRTC configuration
+  const servers = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" }
+    ],
+    iceCandidatePoolSize: 10,
+  };
+
+  joinBtn.onclick = async () => {
+    roomId = roomIdInput.value.trim();
+    if (!roomId) {
+      alert('Please enter a Room ID');
+      return;
+    }
+    joinBtn.disabled = true;
+    roomIdInput.disabled = true;
+
+    await startLocalStream();
+    await joinRoom(roomId);
+  };
+
+  hangupBtn.onclick = async () => {
+    hangupBtn.disabled = true;
+    joinBtn.disabled = false;
+    roomIdInput.disabled = false;
+
+    // Close peer connection and streams
+    if (pc) pc.close();
+    if (localStream) localStream.getTracks().forEach(track => track.stop());
+    localVideo.srcObject = null;
+    remoteVideo.srcObject = null;
+
+    // Delete room data from Firestore
+    if (roomRef) {
+      const callerCandidates = await roomRef.collection('callerCandidates').get();
+      callerCandidates.forEach(doc => doc.ref.delete());
+
+      const calleeCandidates = await roomRef.collection('calleeCandidates').get();
+      calleeCandidates.forEach(doc => doc.ref.delete());
+
+      await deleteDoc(roomRef);
+    }
+
+    roomRef = null;
+    pc = null;
+    localStream = null;
+    remoteStream = null;
+
+    joinBtn.disabled = false;
+    roomIdInput.disabled = false;
+  };
+
+  async function startLocalStream() {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+  }
+
+  async function joinRoom(roomId) {
+    roomRef = doc(db, 'rooms', roomId);
+
+    pc = new RTCPeerConnection(servers);
+    remoteStream = new MediaStream();
+    remoteVideo.srcObject = remoteStream;
+
+    // Add local stream tracks to peer connection
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+    // Collect ICE candidates and save to Firestore
+    callerCandidatesCollection = collection(roomRef, 'callerCandidates');
+    calleeCandidatesCollection = collection(roomRef, 'calleeCandidates');
+
+    pc.onicecandidate = event => {
+      if (event.candidate) {
+        setDoc(doc(callerCandidatesCollection), event.candidate.toJSON());
+      }
+    };
+
+    // Pull remote tracks and add to remote stream
+    pc.ontrack = event => {
+      event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
+    };
+
+    // Check if room exists
+    const roomSnapshot = await getDoc(roomRef);
+
+    if (!roomSnapshot.exists()) {
+      // Create offer (caller)
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const roomWithOffer = {
+        offer: {
+          type: offer.type,
+          sdp: offer.sdp,
+        }
+      };
+
+      await setDoc(roomRef, roomWithOffer);
+
+      // Listen for answer
+      onSnapshot(roomRef, async snapshot => {
+        const data = snapshot.data();
+        if (!pc.currentRemoteDescription && data?.answer) {
+          const answerDesc = new RTCSessionDescription(data.answer);
+          await pc.setRemoteDescription(answerDesc);
+          hangupBtn.disabled = false;
+        }
+      });
+
+      // Listen for callee ICE candidates
+      const calleeCandidatesSnapshot = collection(roomRef, 'calleeCandidates');
+      onSnapshot(calleeCandidatesSnapshot, snapshot => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const candidate = new RTCIceCandidate(change.doc.data());
+            pc.addIceCandidate(candidate);
+          }
+        });
+      });
+
+    } else {
+      // Join existing room (callee)
+      const roomData = roomSnapshot.data();
+      const offerDesc = roomData.offer;
+      await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+
+      // Create answer
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      const roomWithAnswer = {
+        answer: {
+          type: answer.type,
+          sdp: answer.sdp,
+        }
+      };
+
+      await setDoc(roomRef, roomWithAnswer, { merge: true });
+
+      // Listen for caller ICE candidates
+      const callerCandidatesSnapshot = collection(roomRef, 'callerCandidates');
+      onSnapshot(callerCandidatesSnapshot, snapshot => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const candidate = new RTCIceCandidate(change.doc.data());
+            pc.addIceCandidate(candidate);
+          }
+        });
+      });
+
+      hangupBtn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>

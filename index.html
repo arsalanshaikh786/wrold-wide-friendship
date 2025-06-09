@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FriendGlobe - Login / Register</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f8ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.15);
+      width: 350px;
+      text-align: center;
+    }
+    h2 {
+      margin-bottom: 20px;
+      color: #007bff;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0 16px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    #toggleBtn {
+      background: transparent;
+      color: #007bff;
+      margin-top: 10px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      text-decoration: underline;
+    }
+    #errorMsg {
+      color: red;
+      margin-bottom: 10px;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2 id="formTitle">Login to FriendGlobe</h2>
+  
+  <div id="errorMsg"></div>
+
+  <input type="email" id="email" placeholder="Email" autocomplete="username" />
+  <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
+
+  <button id="submitBtn">Login</button>
+  <button id="toggleBtn">Don't have an account? Register</button>
+</div>
+
+<script type="module">
+  // Import needed Firebase SDKs
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+  import { getAuth, 
+           createUserWithEmailAndPassword, 
+           signInWithEmailAndPassword, 
+           onAuthStateChanged 
+         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+  import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+  // Your Firebase config (replace with your own!)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDpsoZ_648AwwL3BU-I_Hze5gZ90mFUTcs",
+    authDomain: "aaaa-8683a.firebaseapp.com",
+    projectId: "aaaa-8683a",
+    storageBucket: "aaaa-8683a.firebasestorage.app",
+    messagingSenderId: "864632443782",
+    appId: "1:864632443782:web:2896df049c72439d7dd207"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // UI elements
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const submitBtn = document.getElementById("submitBtn");
+  const toggleBtn = document.getElementById("toggleBtn");
+  const formTitle = document.getElementById("formTitle");
+  const errorMsg = document.getElementById("errorMsg");
+
+  let isLogin = true;
+
+  toggleBtn.onclick = () => {
+    isLogin = !isLogin;
+    errorMsg.textContent = "";
+    if (isLogin) {
+      formTitle.textContent = "Login to FriendGlobe";
+      submitBtn.textContent = "Login";
+      toggleBtn.textContent = "Don't have an account? Register";
+      passwordInput.placeholder = "Password";
+    } else {
+      formTitle.textContent = "Register a new account";
+      submitBtn.textContent = "Register";
+      toggleBtn.textContent = "Already have an account? Login";
+      passwordInput.placeholder = "Password (min 6 chars)";
+    }
+  };
+
+  submitBtn.onclick = async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
+    errorMsg.textContent = "";
+
+    if (!email || !password) {
+      errorMsg.textContent = "Please enter email and password.";
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        // Login user
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        // Register new user
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Save user data in Firestore
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          email: email,
+          createdAt: new Date().toISOString()
+        });
+      }
+      // Redirect after login/register success
+      window.location.href = "home.html";
+    } catch (error) {
+      errorMsg.textContent = error.message;
+    }
+  };
+
+  // Auto redirect if already logged in
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      window.location.href = "home.html";
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FriendGlobe - Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #007bff;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      font-size: 20px;
+    }
+    #messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      background: white;
+      border-top: 1px solid #ddd;
+      border-bottom: 1px solid #ddd;
+    }
+    .message {
+      margin-bottom: 10px;
+      padding: 8px;
+      border-radius: 8px;
+      max-width: 70%;
+      word-wrap: break-word;
+    }
+    .message.you {
+      background-color: #cce5ff;
+      margin-left: auto;
+      text-align: right;
+    }
+    .message.other {
+      background-color: #e2e3e5;
+      margin-right: auto;
+      text-align: left;
+    }
+    #inputArea {
+      display: flex;
+      padding: 10px;
+      background: #f1f1f1;
+    }
+    #inputMessage {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+    #sendBtn {
+      margin-left: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #007bff;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    #sendBtn:hover {
+      background: #0056b3;
+    }
+    #logoutBtn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: #cc3300;
+      border: none;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<header>FriendGlobe Chat</header>
+<button id="logoutBtn">Logout</button>
+<div id="messages"></div>
+<div id="inputArea">
+  <input type="text" id="inputMessage" placeholder="Type your message..." autocomplete="off" />
+  <button id="sendBtn">Send</button>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+  import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDpsoZ_648AwwL3BU-I_Hze5gZ90mFUTcs",
+    authDomain: "aaaa-8683a.firebaseapp.com",
+    projectId: "aaaa-8683a",
+    storageBucket: "aaaa-8683a.firebasestorage.app",
+    messagingSenderId: "864632443782",
+    appId: "1:864632443782:web:2896df049c72439d7dd207"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const messagesDiv = document.getElementById('messages');
+  const inputMessage = document.getElementById('inputMessage');
+  const sendBtn = document.getElementById('sendBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  let currentUser = null;
+
+  onAuthStateChanged(auth, user => {
+    if (!user) {
+      // Not logged in? Redirect to login
+      window.location.href = "index.html";
+      return;
+    }
+    currentUser = user;
+    listenForMessages();
+  });
+
+  // Listen for new messages in Firestore collection "messages"
+  function listenForMessages() {
+    const messagesQuery = query(
+      collection(db, "messages"),
+      orderBy("createdAt", "asc")
+    );
+
+    onSnapshot(messagesQuery, snapshot => {
+      messagesDiv.innerHTML = "";
+      snapshot.forEach(doc => {
+        const msg = doc.data();
+        const msgDiv = document.createElement("div");
+        msgDiv.textContent = msg.text;
+        msgDiv.classList.add("message");
+        if (msg.uid === currentUser.uid) {
+          msgDiv.classList.add("you");
+        } else {
+          msgDiv.classList.add("other");
+        }
+        messagesDiv.appendChild(msgDiv);
+      });
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+  }
+
+  sendBtn.onclick = async () => {
+    const text = inputMessage.value.trim();
+    if (text === "") return;
+
+    try {
+      await addDoc(collection(db, "messages"), {
+        text,
+        uid: currentUser.uid,
+        email: currentUser.email,
+        createdAt: serverTimestamp()
+      });
+      inputMessage.value = "";
+    } catch (err) {
+      alert("Error sending message: " + err.message);
+    }
+  };
+
+  // Allow pressing Enter to send message
+  inputMessage.addEventListener("keyup", e => {
+    if (e.key === "Enter") sendBtn.click();
+  });
+
+  logoutBtn.onclick = async () => {
+    await signOut(auth);
+    window.location.href = "index.html";
+  };
+</script>
+
+</body>
+</html>

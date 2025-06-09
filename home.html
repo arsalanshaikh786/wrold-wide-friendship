@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FriendGlobe - Home</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #e6f2ff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      color: #004080;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 12px 20px;
+      margin: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #userEmail {
+      margin-bottom: 40px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Welcome to FriendGlobe</h1>
+  <div id="userEmail"></div>
+
+  <button id="chatBtn">Go to Chat</button>
+  <button id="videoBtn">Go to Video Call</button>
+  <button id="logoutBtn" style="background-color: #cc3300;">Logout</button>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+
+    // Firebase config - same as in index.html
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpsoZ_648AwwL3BU-I_Hze5gZ90mFUTcs",
+      authDomain: "aaaa-8683a.firebaseapp.com",
+      projectId: "aaaa-8683a",
+      storageBucket: "aaaa-8683a.firebasestorage.app",
+      messagingSenderId: "864632443782",
+      appId: "1:864632443782:web:2896df049c72439d7dd207"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    const userEmailDiv = document.getElementById("userEmail");
+    const chatBtn = document.getElementById("chatBtn");
+    const videoBtn = document.getElementById("videoBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    // Show user email or redirect if not logged in
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        userEmailDiv.textContent = `Logged in as: ${user.email}`;
+      } else {
+        // Redirect to login if no user
+        window.location.href = "index.html";
+      }
+    });
+
+    // Navigation buttons
+    chatBtn.onclick = () => {
+      window.location.href = "chat.html"; // We'll build this next
+    };
+
+    videoBtn.onclick = () => {
+      window.location.href = "video.html"; // We'll build this next
+    };
+
+    logoutBtn.onclick = async () => {
+      await signOut(auth);
+      window.location.href = "index.html";
+    };
+  </script>
+
+</body>
+</html>
